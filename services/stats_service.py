@@ -81,6 +81,40 @@ def calculate_streak(
     return _count_streak(dates, today)
 
 
+def calculate_genre_streak(
+    user_id: str,
+    genre: str,
+    timezone_name: str = "UTC",
+    now: datetime | None = None,
+) -> int:
+    """
+    Calculate consecutive local days where a user finished a book in a genre.
+
+    Args:
+        user_id: ID of the user.
+        genre: Genre to count, matched case-insensitively.
+        timezone_name: IANA timezone name used to decide local reading dates.
+        now: Current timestamp override for tests.
+
+    Returns:
+        The genre streak count as an integer.
+    """
+    local_timezone = _get_timezone(timezone_name)
+    target_genre = genre.casefold()
+    events = reading_service.get_reading_history(user_id)
+
+    dates = {
+        _local_date(e.finished_at, local_timezone)
+        for e in events
+        if e.book.genre and e.book.genre.casefold() == target_genre
+    }
+
+    current_time = now or datetime.now(timezone.utc)
+    today = _local_date(current_time, local_timezone)
+
+    return _count_streak(dates, today)
+
+
 def books_this_month(user_id: str) -> int:
     """
     Count the number of books the user finished in the current calendar month.
