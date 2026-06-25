@@ -1,4 +1,6 @@
-# AI Usage
+# BookClub Lab 5 Submission
+
+## AI Usage
 
 I used AI tools during codebase navigation and debugging to move through the
 project deliberately instead of guessing. The AI helped identify the likely
@@ -13,9 +15,9 @@ confirmed against the seeded behavior for Alex, Priya, and Marcus. I also kept
 the changes smaller than a broad AI-generated refactor by making only the two
 field changes supported by the code contracts and observed API output.
 
-# Codebase Map
+## Codebase Map
 
-## Main Files And Roles
+### Main Files And Roles
 
 - `app.py`: creates the Flask app, configures SQLAlchemy, registers the route
   blueprints, and creates database tables.
@@ -33,7 +35,7 @@ field changes supported by the code contracts and observed API output.
 - `seed_data.py`: rebuilds the local database with sample users, books, and
   reading events for testing.
 
-## Data Flow: User Stats
+### Data Flow: User Stats
 
 For `GET /stats/<user_id>`, the request enters `routes/stats.py` at
 `get_stats()`. That route does not calculate stats itself. Instead, it calls
@@ -60,9 +62,9 @@ The full call chain for the streak feature is: HTTP request ->
 does not use the `User.reading_streak` column; it computes the streak live from
 finished reading events.
 
-# Root Cause Analysis
+## Root Cause Analysis
 
-## Bug 1: Reading Streak Returned 0
+### Bug 1: Reading Streak Returned 0
 
 Observed behavior: Alex's stats endpoint returned `reading_streak: 0` even
 though Alex had finished books on three consecutive calendar days.
@@ -91,7 +93,7 @@ Verification: After the fix, Alex's stats returned `reading_streak: 3`,
 `books_this_month: 3`, and `total_pages_read: 814`. The other stat values stayed
 correct.
 
-## Bug 2: Reading History Was In The Wrong Order
+### Bug 2: Reading History Was In The Wrong Order
 
 Observed behavior: Alex's history endpoint returned the correct finished books,
 but listed `Giovanni's Room` first even though it was not the most recently
@@ -119,7 +121,7 @@ first with the June 25, 2026 finish timestamp. Priya's history also returned
 the June 18 finish before the June 17 finish. Alex's streak remained `3`, while
 Priya's and Marcus's streaks were both `0`.
 
-# Discussion Reflection
+## Discussion Reflection
 
 Thorough verification changed what I found because fixing the streak did not end
 the investigation. After the first fix, the stats endpoint was correct, but
@@ -133,9 +135,9 @@ instead of finish dates. Bug 2 returned the right records with the right dates,
 but presented them in the wrong order. They both involved `started_at` where
 `finished_at` belonged, but they were different categories of mistake.
 
-# Optional Challenges
+## Optional Challenges
 
-## Timezone-Aware Streaks
+### Timezone-Aware Streaks
 
 `mark_as_finished()` stores completion timestamps with
 `datetime.now(timezone.utc)`, so the source-of-truth finish time is UTC. The
@@ -155,7 +157,7 @@ The stats endpoint now supports:
 
 Invalid timezone names return a `400` response with an error message.
 
-## Genre Streak
+### Genre Streak
 
 The genre streak challenge adds
 `stats_service.calculate_genre_streak(user_id, genre, timezone_name="UTC")` and
@@ -167,7 +169,7 @@ Against the seed data, Alex's longest genre streak is `sci-fi` with a streak of
 `2`. The two sci-fi finishes are on consecutive days, while the literary fiction
 finish is too far back to start the current streak.
 
-## Tests Added
+### Tests Added
 
 I added pytest coverage using an in-memory SQLite database so tests do not
 depend on the local seeded database. The tests cover:
@@ -179,7 +181,7 @@ depend on the local seeded database. The tests cover:
 
 The suite passes with `./.venv/bin/python -m pytest`.
 
-## Other Stats Audit
+### Other Stats Audit
 
 `books_this_month()` is correct for the basic seed data, but it is still tied to
 server/current-date logic. On the first day of a month, a book finished late the
