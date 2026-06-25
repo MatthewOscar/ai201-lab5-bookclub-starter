@@ -6,10 +6,51 @@ and total pages read.
 """
 
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from services import reading_service
 
 
-def calculate_streak(user_id: str) -> int:
+def _get_timezone(timezone_name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        raise ValueError(f"Unknown timezone: {timezone_name}") from None
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _local_date(value: datetime, local_timezone: ZoneInfo) -> date:
+    return _as_utc(value).astimezone(local_timezone).date()
+
+
+def _count_streak(dates: set[date], today: date) -> int:
+    if not dates:
+        return 0
+
+    sorted_dates = sorted(dates, reverse=True)
+
+    # Streak must start from today or yesterday — otherwise it has already broken.
+    if (today - sorted_dates[0]).days > 1:
+        return 0
+
+    streak = 1
+    for i in range(len(sorted_dates) - 1):
+        delta = (sorted_dates[i] - sorted_dates[i + 1]).days
+        if delta == 1:
+            streak += 1
+        else:
+            break
+
+    return streak
+
+
+def calculate_streak(
+    user_id: str, timezone_name: str = "UTC", now: datetime | None = None
+) -> int:
     """
     Calculate a user's current reading streak in consecutive days.
 
@@ -22,35 +63,22 @@ def calculate_streak(user_id: str) -> int:
 
     Args:
         user_id: ID of the user.
+        timezone_name: IANA timezone name used to decide local reading dates.
+        now: Current timestamp override for tests.
 
     Returns:
         The streak count as an integer.
     """
+    local_timezone = _get_timezone(timezone_name)
     events = reading_service.get_reading_history(user_id)
-    if not events:
-        return 0
 
     # Collect unique reading dates, most recent first.
-    dates = sorted(
-        set(e.finished_at.date() for e in events),
-        reverse=True,
-    )
+    dates = {_local_date(e.finished_at, local_timezone) for e in events}
 
-    today = date.today()
+    current_time = now or datetime.now(timezone.utc)
+    today = _local_date(current_time, local_timezone)
 
-    # Streak must start from today or yesterday — otherwise it has already broken.
-    if (today - dates[0]).days > 1:
-        return 0
-
-    streak = 1
-    for i in range(len(dates) - 1):
-        delta = (dates[i] - dates[i + 1]).days
-        if delta == 1:
-            streak += 1
-        else:
-            break
-
-    return streak
+    return _count_streak(dates, today)
 
 
 def books_this_month(user_id: str) -> int:
