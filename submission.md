@@ -132,3 +132,62 @@ Bug 1 returned the wrong computed value because the calculation used start dates
 instead of finish dates. Bug 2 returned the right records with the right dates,
 but presented them in the wrong order. They both involved `started_at` where
 `finished_at` belonged, but they were different categories of mistake.
+
+# Optional Challenges
+
+## Timezone-Aware Streaks
+
+`mark_as_finished()` stores completion timestamps with
+`datetime.now(timezone.utc)`, so the source-of-truth finish time is UTC. The
+original streak calculation used the date portion directly, which works only if
+the server's date boundary and the user's local date boundary are the same.
+
+The updated streak logic accepts an IANA timezone name, defaults to `UTC`, and
+converts each UTC `finished_at` timestamp into the user's local date before
+counting consecutive days. It also treats SQLite-returned naive datetimes as
+UTC, because SQLite may not preserve Python timezone metadata even when the
+application wrote an aware datetime.
+
+The stats endpoint now supports:
+
+- `GET /stats/<user_id>`
+- `GET /stats/<user_id>?timezone=America/Chicago`
+
+Invalid timezone names return a `400` response with an error message.
+
+## Genre Streak
+
+The genre streak challenge adds
+`stats_service.calculate_genre_streak(user_id, genre, timezone_name="UTC")` and
+the endpoint `GET /stats/<user_id>/genre-streak/<genre>`. It counts consecutive
+local days where the user finished at least one book in the requested genre.
+Genre matching is case-insensitive, and books without a genre are ignored.
+
+Against the seed data, Alex's longest genre streak is `sci-fi` with a streak of
+`2`. The two sci-fi finishes are on consecutive days, while the literary fiction
+finish is too far back to start the current streak.
+
+## Tests Added
+
+I added pytest coverage using an in-memory SQLite database so tests do not
+depend on the local seeded database. The tests cover:
+
+- `calculate_streak()` using finish dates rather than old start dates.
+- timezone conversion where two UTC timestamps fall on different local dates.
+- `get_reading_history()` returning most-recently-finished first.
+- the genre streak route counting matching genres case-insensitively.
+
+The suite passes with `./.venv/bin/python -m pytest`.
+
+## Other Stats Audit
+
+`books_this_month()` is correct for the basic seed data, but it is still tied to
+server/current-date logic. On the first day of a month, a book finished late the
+previous night in a user's local timezone could be counted in the wrong month if
+the UTC/server date has already crossed into the next month. A fully local-date
+version would need the same timezone treatment as the streak logic.
+
+`total_pages_read()` correctly sums the page counts on finished books, but a book
+with `pages = 0` would silently contribute `0` pages. That may be mathematically
+correct, but it could hide bad input data because the app currently does not
+validate that page counts are positive when adding or storing a book.
